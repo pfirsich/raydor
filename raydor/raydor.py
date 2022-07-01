@@ -5,53 +5,20 @@ import json
 import re
 import shutil
 import sys
-from dataclasses import dataclass
 from datetime import datetime
 
 import markdown
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from ruamel.yaml import YAML
+import yaml
 
-yaml = YAML()
-
-
-@dataclass
-class Templated:
-    template: str
-    data: str | dict
-
-
-@dataclass
-class Copy:
-    source: str
-
-
-files = {
-    "index.html": Templated("templates/index.html", {}),
-    "projects.html": Templated(
-        "templates/projects.html", {"projects": "src/projects.json"}
-    ),
-    "blog.html": Templated(
-        "templates/blog.html", {"posts": "src/blog/*.md"}
-    ),  # FIGURE OUT SORTING
-    "blog/test.html": Templated("templates/blogpost.html", "src/blog/test.md"),
-    "blog/test2.html": Templated("templates/blogpost.html", "src/blog/test2.md"),
-    "images/": Copy("images/"),
-}
-
-extension_configs = {
-    "smarty": {
-        "substitutions": {
-            "'": "&#8217;",
-            "...": "&#8230;",
-        },
-    },
+md_ext_config = {
+    "smarty": {"substitutions": {}},
 }
 
 
 def markdown_filter(text):
     return markdown.markdown(
-        text, extensions=["smarty"], extension_configs=extension_configs
+        text, extensions=["smarty"], extension_configs=md_ext_config
     )
 
 
@@ -84,37 +51,43 @@ def load_markdown(path):
     with open(path) as f:
         file = f.read()
     m = re.match(r"^---\n(.*?)\n---\n(.*)$", file, re.DOTALL)
-    data = yaml.load(m.group(1))
+    data = yaml.load(m.group(1), Loader=yaml.FullLoader)
     data["content"] = markdown.markdown(
-        m.group(2), extensions=["smarty"], extension_configs=extension_configs
+        m.group(2), extensions=["smarty"], extension_configs=md_ext_config
     )
     data["filename"] = os.path.basename(path)
     return data
 
 
-def expand_template_data(data):
-    loaders = {".json": load_json, ".md": load_markdown}
-
-    if isinstance(data, dict):
-        return {k: expand_template_data(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [expand_template_data(e) for e in data]
-    elif isinstance(data, str):
-        loader = loaders.get(os.path.splitext(data)[1])
-        if loader:
-            if "*" in data:
-                return [loader(match) for match in glob.glob(data)]
-            else:
-                return loader(data)
-        return data
+def load(path):
+    if path.endswith(".json"):
+        return load_json(path)
+    elif path.endswith(".md"):
+        return load_markdown(path)
     else:
-        return data
+        return f"Cannot load '{path}'"
+
+
+def load_constructor(loader, node):
+    return load(loader.construct_scalar(node))
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", "-o", default="output")
+    parser.add_argument("config")
     args = parser.parse_args()
+
+    yaml.add_constructor("!load", load_constructor)
+
+    with open(args.config) as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+
+    md_ext_config["smarty"]["substitutions"].update(
+        config.get("markdown_substitutions", {})
+    )
+
+    template_global_vars = config.get("globals", {})
 
     env = Environment(loader=FileSystemLoader("."), autoescape=select_autoescape())
     env.filters["markdown"] = markdown_filter
@@ -125,23 +98,41 @@ def main():
         shutil.rmtree(args.output)
     os.makedirs(args.output, exist_ok=True)
 
-    for rel_output_path, file in files.items():
-        sys.stdout.write(rel_output_path + ".. ")
-        output_path = os.path.join(args.output, rel_output_path)
-        if isinstance(file, Templated):
-            data = expand_template_data(file.data)
-            make_dirs(output_path)
-            with open(output_path, "w") as f:
-                f.write(env.get_template(file.template).render(data))
-        elif isinstance(file, Copy):
-            if os.path.isdir(file.source):
-                shutil.copytree(file.source, output_path, dirs_exist_ok=True)
+    for output_name, file in config["files"].items():
+        print(output_name)
+        output_path = os.path.join(args.output, output_name)
+
+        if isinstance(file, str):
+            if os.path.isdir(file):
+                shutil.copytree(file, output_path, dirs_exist_ok=True)
             else:
                 make_dirs(output_path)
                 shutil.copy2(file.source, output_path)
+        elif isinstance(file, dict):
+            if "generator" in file:
+                file_matches = glob.glob(file["generator"].replace("%", "*"))
+                for file_match in file_matches:
+                    re_match = re.match(
+                        file["generator"].replace("%", "(.*)"), file_match
+                    )
+                    gen_output_name = output_name.replace("%", re_match.group(1))
+                    print("-", gen_output_name)
+                    output_path = os.path.join(args.output, gen_output_name)
+                    template_vars = load(file_match)
+                    template_vars.update(template_global_vars)
+                    make_dirs(output_path)
+                    with open(output_path, "w") as f:
+                        f.write(
+                            env.get_template(file["template"]).render(template_vars)
+                        )
+            else:
+                template_vars = file.get("vars", {})
+                template_vars.update(template_global_vars)
+                make_dirs(output_path)
+                with open(output_path, "w") as f:
+                    f.write(env.get_template(file["template"]).render(template_vars))
         else:
-            sys.exit("Invalid item class")
-        sys.stdout.write("done\n")
+            sys.exit("Invalid 'files' element type")
 
 
 if __name__ == "__main__":
