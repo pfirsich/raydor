@@ -11,6 +11,10 @@ import markdown
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import yaml
 
+md_extensions = [
+    "smarty",
+]
+
 md_ext_config = {
     "smarty": {"substitutions": {}},
 }
@@ -18,7 +22,7 @@ md_ext_config = {
 
 def markdown_filter(text):
     return markdown.markdown(
-        text, extensions=["smarty"], extension_configs=md_ext_config
+        text, extensions=md_extensions, extension_configs=md_ext_config
     )
 
 
@@ -53,7 +57,7 @@ def load_markdown(path):
     m = re.match(r"^---\n(.*?)\n---\n(.*)$", file, re.DOTALL)
     data = yaml.load(m.group(1), Loader=yaml.FullLoader)
     data["content"] = markdown.markdown(
-        m.group(2), extensions=["smarty"], extension_configs=md_ext_config
+        m.group(2), extensions=md_extensions, extension_configs=md_ext_config
     )
     data["filename"] = os.path.basename(path)
     return data
@@ -86,6 +90,15 @@ def main():
     md_ext_config["smarty"]["substitutions"].update(
         config.get("markdown_substitutions", {})
     )
+
+    if "codehighlight" in config:
+        md_extensions.append("codehilite")
+        md_extensions.append("fenced_code")
+        if "style" in config["codehighlight"]:
+            md_ext_config["codehilite"] = {
+                "pygments_style": config["codehighlight"]["style"],
+                "noclasses": True,
+            }
 
     template_global_vars = config.get("globals", {})
 
