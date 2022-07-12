@@ -51,6 +51,11 @@ def load_json(path):
         return json.load(f)
 
 
+def load_yaml(path):
+    with open(path) as f:
+        return yaml.load(f, Loader=yaml.FullLoader)
+
+
 def load_markdown(path):
     with open(path) as f:
         file = f.read()
@@ -66,6 +71,8 @@ def load_markdown(path):
 def load(path):
     if path.endswith(".json"):
         return load_json(path)
+    elif path.endswith(".yaml") or path.endswith(".yml"):
+        return load_yaml(path)
     elif path.endswith(".md"):
         return load_markdown(path)
     else:
