@@ -97,6 +97,7 @@ def main():
         if "style" in config["codehighlight"]:
             md_ext_config["codehilite"] = {
                 "pygments_style": config["codehighlight"]["style"],
+                "css_class": "codehighlight",
                 "noclasses": True,
             }
 
