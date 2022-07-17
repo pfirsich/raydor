@@ -126,9 +126,11 @@ def main():
         if isinstance(file, str):
             if os.path.isdir(file):
                 shutil.copytree(file, output_path, dirs_exist_ok=True)
-            else:
+            elif os.path.isfile(file):
                 make_dirs(output_path)
-                shutil.copy2(file.source, output_path)
+                shutil.copy2(file, output_path)
+            else:
+                sys.exit(f"Source '{file}' does not exist")
         elif isinstance(file, dict):
             if "generator" in file:
                 file_matches = glob.glob(file["generator"].replace("%", "*"))
