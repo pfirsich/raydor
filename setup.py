@@ -19,7 +19,7 @@ setuptools.setup(
     install_requires=[
         "Pygments==2.11.2",
         "Jinja2==3.0.3",
-        "PyYAML==5.4.1",
+        "PyYAML==5.3.1",
         "Markdown==3.3.7",
     ],
     entry_points={
