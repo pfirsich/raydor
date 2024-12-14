@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="raydor",
-    version="0.0.1",
+    version="0.1.0",
     author="Joel Schumacher",
     author_email="joelschum@gmail.com",
     description="A static site generator",
@@ -15,7 +15,7 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=[
         "Pygments==2.11.2",
         "Jinja2==3.0.3",
