@@ -6,6 +6,9 @@ import re
 import shutil
 import sys
 from datetime import datetime
+from urllib.parse import urlparse
+import email.utils
+from xml.sax.saxutils import escape as xml_escape_filter
 
 import markdown
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -25,11 +28,13 @@ def markdown_filter(text):
         text, extensions=md_extensions, extension_configs=md_ext_config
     )
 
+def make_dt(arg):
+    if isinstance(arg, str):
+        arg = datetime.fromisoformat(arg).astimezone() # `date -Iminutes`
+    return arg
 
 def datetime_filter(arg, fmt):
-    if isinstance(arg, str):
-        arg = datetime.fromisoformat(arg)  # `date -Iminutes`
-    return arg.strftime(fmt)
+    return make_dt(arg).strftime(fmt)
 
 
 # delim = " " to limit words, "." to limit sentences
@@ -41,6 +46,22 @@ def limit_filter(text: str, delim, n):
             return text
     return text[0:pos] + " ..."
 
+def url_hostname_filter(text: str):
+    url = urlparse(text)
+    return url.hostname
+
+def to_id_filter(text: str):
+    text = text.lower().replace(" ", "-")
+    return re.sub("r[^a-zA-Z0-9-_:.]+", '', text)
+
+def rfc822_filter(arg):
+    return email.utils.format_datetime(make_dt(arg))
+
+def to_json_filter(text: str):
+    return json.dumps(text)
+
+def now_tz_global():
+    return datetime.now().astimezone()
 
 def make_dirs(file_path):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -111,9 +132,15 @@ def main():
     template_global_vars = config.get("globals", {})
 
     env = Environment(loader=FileSystemLoader("."), autoescape=select_autoescape())
+    env.globals["now_tz"] = now_tz_global
     env.filters["markdown"] = markdown_filter
     env.filters["datetime"] = datetime_filter
     env.filters["limit"] = limit_filter
+    env.filters["url_hostname"] = url_hostname_filter
+    env.filters["to_id"] = to_id_filter
+    env.filters["rfc822"] = rfc822_filter
+    env.filters["to_json"] = to_json_filter
+    env.filters["xml_escape"] = xml_escape_filter
 
     if os.path.isdir(args.output):
         shutil.rmtree(args.output)
