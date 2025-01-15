@@ -23,6 +23,6 @@ setuptools.setup(
         "Markdown==3.3.7",
     ],
     entry_points={
-        "console_scripts": ["raydor=raydor.raydor:main"],
+        "console_scripts": ["raydor=raydor:main"],
     },
 )
