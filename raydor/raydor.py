@@ -16,6 +16,7 @@ import yaml
 
 md_extensions = [
     "smarty",
+    "toc",
 ]
 
 md_ext_config = {
